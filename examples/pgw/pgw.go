@@ -11,6 +11,7 @@ import (
 
 	"github.com/wmnsk/go-gtp"
 	"github.com/wmnsk/go-gtp/gtpv1"
+	g1message "github.com/wmnsk/go-gtp/gtpv1/message"
 	"github.com/wmnsk/go-gtp/gtpv2"
 	"github.com/wmnsk/go-gtp/gtpv2/ie"
 	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
@@ -47,7 +48,9 @@ func handleCreatePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Mess
 	if msg.Version() != 1 {
 		return fmt.Errorf("wrong version")
 	}
-	fmt.Printf("TODO: implement handleCreatePdpContextRequest")
+
+	createPdpReq := msg.(*g1message.CreatePDPContextRequest)
+	fmt.Printf("create PDP req: %v\n", createPdpReq)
 	return nil
 }
 
@@ -55,7 +58,8 @@ func handleDeletePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Mess
 	if msg.Version() != 1 {
 		return fmt.Errorf("wrong version")
 	}
-	fmt.Printf("TODO: implement handleDeletePdpContextRequest")
+	deletePdpReq := msg.(*g1message.DeletePDPContextRequest)
+	fmt.Printf("create PDP req: %v\n", deletePdpReq)
 	return nil
 }
 

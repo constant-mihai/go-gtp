@@ -195,7 +195,7 @@ func (c *Conn) Serve(ctx context.Context) error {
 		raw := make([]byte, n)
 		copy(raw, buf)
 		go func() {
-			msg, err := message.Parse(raw)
+			msg, err := gtp.Parse(raw)
 			if err != nil {
 				logf("error parsing the message: %v, %x", err, raw)
 				return
