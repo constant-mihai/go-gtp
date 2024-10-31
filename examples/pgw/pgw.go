@@ -9,10 +9,11 @@ import (
 	"net"
 	"strings"
 
+	"github.com/wmnsk/go-gtp"
 	"github.com/wmnsk/go-gtp/gtpv1"
 	"github.com/wmnsk/go-gtp/gtpv2"
 	"github.com/wmnsk/go-gtp/gtpv2/ie"
-	"github.com/wmnsk/go-gtp/gtpv2/message"
+	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
 // getSubscriberIP is to get IP address to be assigned to the subscriber.
@@ -42,13 +43,36 @@ var (
 	uConn *gtpv1.UPlaneConn
 )
 
-func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Message) error {
+func handleCreatePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Message) error {
+	if msg.Version() != 1 {
+		return fmt.Errorf("wrong version")
+	}
+	fmt.Printf("TODO: implement handleCreatePdpContextRequest")
+	return nil
+}
+
+func handleDeletePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Message) error {
+	if msg.Version() != 1 {
+		return fmt.Errorf("wrong version")
+	}
+	fmt.Printf("TODO: implement handleDeletePdpContextRequest")
+	return nil
+}
+
+func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.Message) error {
+	if genericMsg.Version() != 2 {
+		return fmt.Errorf("wrong version")
+	}
+	msg, ok := genericMsg.(g2message.Message)
+	if !ok {
+		return fmt.Errorf("could not cast message")
+	}
 	loggerCh <- fmt.Sprintf("Received %s from %s", msg.MessageTypeName(), sgwAddr)
 
 	// assert type to refer to the struct field specific to the message.
 	// in general, no need to check if it can be type-asserted, as long as the MessageType is
 	// specified correctly in AddHandler().
-	csReqFromSGW := msg.(*message.CreateSessionRequest)
+	csReqFromSGW := msg.(*g2message.CreateSessionRequest)
 
 	// keep session information retrieved from the message.
 	session := gtpv2.NewSession(sgwAddr, &gtpv2.Subscriber{Location: &gtpv2.Location{}})
@@ -164,7 +188,7 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	if err != nil {
 		return err
 	}
-	csRspFromPGW := message.NewCreateSessionResponse(
+	csRspFromPGW := g2message.NewCreateSessionResponse(
 		s5sgwTEID, 0,
 		ie.NewCause(gtpv2.CauseRequestAccepted, 0, 0, 0, nil),
 		s5cFTEID,
@@ -227,7 +251,14 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	return nil
 }
 
-func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Message) error {
+func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.Message) error {
+	if genericMsg.Version() != 2 {
+		return fmt.Errorf("wrong version")
+	}
+	msg, ok := genericMsg.(g2message.Message)
+	if !ok {
+		return fmt.Errorf("could not cast message")
+	}
 	loggerCh <- fmt.Sprintf("Received %s from %s", msg.MessageTypeName(), sgwAddr)
 
 	// assert type to refer to the struct field specific to the message.
@@ -235,7 +266,7 @@ func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	// specified correctly in AddHandler().
 	session, err := c.GetSessionByTEID(msg.TEID(), sgwAddr)
 	if err != nil {
-		dsr := message.NewDeleteSessionResponse(
+		dsr := g2message.NewDeleteSessionResponse(
 			0, 0,
 			ie.NewCause(gtpv2.CauseIMSIIMEINotKnown, 0, 0, 0, nil),
 		)
@@ -252,7 +283,7 @@ func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 		loggerCh <- fmt.Sprintf("Error: %v", err)
 		return nil
 	}
-	dsr := message.NewDeleteSessionResponse(
+	dsr := g2message.NewDeleteSessionResponse(
 		teid, 0,
 		ie.NewCause(gtpv2.CauseRequestAccepted, 0, 0, 0, nil),
 	)

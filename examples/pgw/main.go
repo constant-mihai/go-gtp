@@ -28,8 +28,9 @@ import (
 	"time"
 
 	"github.com/wmnsk/go-gtp/gtpv1"
+	g1message "github.com/wmnsk/go-gtp/gtpv1/message"
 	"github.com/wmnsk/go-gtp/gtpv2"
-	"github.com/wmnsk/go-gtp/gtpv2/message"
+	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
 // command-line arguments
@@ -53,6 +54,7 @@ func main() {
 
 	// start listening on the specified IP:Port.
 	s5cConn := gtpv2.NewConn(s5cAddr, gtpv2.IFTypeS5S8PGWGTPC, 0)
+	s5cConn.DisableValidation()
 	go func() {
 		if err := s5cConn.ListenAndServe(ctx); err != nil {
 			log.Println(err)
@@ -63,8 +65,10 @@ func main() {
 
 	// register handlers for ALL the message you expect remote endpoint to send.
 	s5cConn.AddHandlers(map[uint8]gtpv2.HandlerFunc{
-		message.MsgTypeCreateSessionRequest: handleCreateSessionRequest,
-		message.MsgTypeDeleteSessionRequest: handleDeleteSessionRequest,
+		g2message.MsgTypeCreateSessionRequest:    handleCreateSessionRequest,
+		g2message.MsgTypeDeleteSessionRequest:    handleDeleteSessionRequest,
+		g1message.MsgTypeCreatePDPContextRequest: handleCreatePdpContextRequest,
+		g1message.MsgTypeDeletePDPContextRequest: handleDeletePdpContextRequest,
 	})
 
 	s5uAddr, err := net.ResolveUDPAddr("udp", *s5u+gtpv2.GTPUPort)
