@@ -7,13 +7,39 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
+	"github.com/wmnsk/go-gtp"
 	"github.com/wmnsk/go-gtp/gtpv1"
+	g1message "github.com/wmnsk/go-gtp/gtpv1/message"
 	"github.com/wmnsk/go-gtp/gtpv2"
 	"github.com/wmnsk/go-gtp/gtpv2/ie"
-	"github.com/wmnsk/go-gtp/gtpv2/message"
+	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
+
+var subIPMap map[string]string = map[string]string{}
+var genIP net.IP
+
+func getNextIP() net.IP {
+	for i := len(genIP) - 1; i >= 0; i-- {
+		genIP[i]++
+		if genIP[i] != 0 {
+			break
+		}
+	}
+
+	return genIP
+}
+
+func populateSubscribers(startImsi int) {
+
+	genIP = net.ParseIP("10.10.10.1")
+	for i := 0; i < 100000; i++ {
+		imsi := fmt.Sprintf("%015s", strconv.FormatUint(uint64(startImsi+i), 10))
+		subIPMap[imsi] = getNextIP().String()
+	}
+}
 
 // getSubscriberIP is to get IP address to be assigned to the subscriber.
 //
@@ -21,14 +47,6 @@ import (
 // but here, to keep the example simple, this just returns subscriber's IP address defined in
 // the map "subIPMap".
 func getSubscriberIP(sub *gtpv2.Subscriber) (string, error) {
-	subIPMap := map[string]string{
-		"123451234567891": "10.10.10.1",
-		"123451234567892": "10.10.10.2",
-		"123451234567893": "10.10.10.3",
-		"123451234567894": "10.10.10.4",
-		"123451234567895": "10.10.10.5",
-	}
-
 	if ip, ok := subIPMap[sub.IMSI]; ok {
 		return ip, nil
 	}
@@ -42,13 +60,39 @@ var (
 	uConn *gtpv1.UPlaneConn
 )
 
-func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Message) error {
+func handleCreatePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Message) error {
+	if msg.Version() != 1 {
+		return fmt.Errorf("wrong version")
+	}
+
+	createPdpReq := msg.(*g1message.CreatePDPContextRequest)
+	fmt.Printf("create PDP req: %v\n", createPdpReq)
+	return nil
+}
+
+func handleDeletePdpContextRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg gtp.Message) error {
+	if msg.Version() != 1 {
+		return fmt.Errorf("wrong version")
+	}
+	deletePdpReq := msg.(*g1message.DeletePDPContextRequest)
+	fmt.Printf("create PDP req: %v\n", deletePdpReq)
+	return nil
+}
+
+func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.Message) error {
+	if genericMsg.Version() != 2 {
+		return fmt.Errorf("wrong version")
+	}
+	msg, ok := genericMsg.(g2message.Message)
+	if !ok {
+		return fmt.Errorf("could not cast message")
+	}
 	loggerCh <- fmt.Sprintf("Received %s from %s", msg.MessageTypeName(), sgwAddr)
 
 	// assert type to refer to the struct field specific to the message.
 	// in general, no need to check if it can be type-asserted, as long as the MessageType is
 	// specified correctly in AddHandler().
-	csReqFromSGW := msg.(*message.CreateSessionRequest)
+	csReqFromSGW := msg.(*g2message.CreateSessionRequest)
 
 	// keep session information retrieved from the message.
 	session := gtpv2.NewSession(sgwAddr, &gtpv2.Subscriber{Location: &gtpv2.Location{}})
@@ -76,22 +120,22 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	} else {
 		return &gtpv2.RequiredIEMissingError{Type: ie.IMSI}
 	}
-	if msisdnIE := csReqFromSGW.MSISDN; msisdnIE != nil {
-		session.MSISDN, err = msisdnIE.MSISDN()
-		if err != nil {
-			return err
-		}
-	} else {
-		return &gtpv2.RequiredIEMissingError{Type: ie.MSISDN}
-	}
-	if meiIE := csReqFromSGW.MEI; meiIE != nil {
-		session.IMEI, err = meiIE.MobileEquipmentIdentity()
-		if err != nil {
-			return err
-		}
-	} else {
-		return &gtpv2.RequiredIEMissingError{Type: ie.MobileEquipmentIdentity}
-	}
+	//if msisdnIE := csReqFromSGW.MSISDN; msisdnIE != nil {
+	//session.MSISDN, err = msisdnIE.MSISDN()
+	//if err != nil {
+	//return err
+	//}
+	//} else {
+	//return &gtpv2.RequiredIEMissingError{Type: ie.MSISDN}
+	//}
+	//if meiIE := csReqFromSGW.MEI; meiIE != nil {
+	//session.IMEI, err = meiIE.MobileEquipmentIdentity()
+	//if err != nil {
+	//return err
+	//}
+	//} else {
+	//return &gtpv2.RequiredIEMissingError{Type: ie.MobileEquipmentIdentity}
+	//}
 	if apnIE := csReqFromSGW.APN; apnIE != nil {
 		bearer.APN, err = apnIE.AccessPointName()
 		if err != nil {
@@ -164,7 +208,7 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	if err != nil {
 		return err
 	}
-	csRspFromPGW := message.NewCreateSessionResponse(
+	csRspFromPGW := g2message.NewCreateSessionResponse(
 		s5sgwTEID, 0,
 		ie.NewCause(gtpv2.CauseRequestAccepted, 0, 0, 0, nil),
 		s5cFTEID,
@@ -203,8 +247,10 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 		for {
 			n, raddr, _, err := uConn.ReadFromGTP(buf)
 			if err != nil {
-				return
+				fmt.Printf("error GTPU: %s", err.Error())
+				// return
 			}
+			fmt.Printf("received GTPU: %s", buf)
 
 			rsp := make([]byte, n)
 			// update message type and checksum
@@ -221,13 +267,20 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 		}
 	}()
 
-	loggerCh <- fmt.Sprintf("Session created with S-GW for subscriber: %s;\n\tS5C S-GW: %s, TEID->: %#x, TEID<-: %#x",
-		session.Subscriber.IMSI, sgwAddr, s5sgwTEID, s5pgwTEID,
+	loggerCh <- fmt.Sprintf("Session created with S-GW for subscriber: %s;\n\tS5C S-GW: %s, TEID->: %#x, TEID<-: %#x, user address: %s",
+		session.Subscriber.IMSI, sgwAddr, s5sgwTEID, s5pgwTEID, bearer.SubscriberIP,
 	)
 	return nil
 }
 
-func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Message) error {
+func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.Message) error {
+	if genericMsg.Version() != 2 {
+		return fmt.Errorf("wrong version")
+	}
+	msg, ok := genericMsg.(g2message.Message)
+	if !ok {
+		return fmt.Errorf("could not cast message")
+	}
 	loggerCh <- fmt.Sprintf("Received %s from %s", msg.MessageTypeName(), sgwAddr)
 
 	// assert type to refer to the struct field specific to the message.
@@ -235,7 +288,7 @@ func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 	// specified correctly in AddHandler().
 	session, err := c.GetSessionByTEID(msg.TEID(), sgwAddr)
 	if err != nil {
-		dsr := message.NewDeleteSessionResponse(
+		dsr := g2message.NewDeleteSessionResponse(
 			0, 0,
 			ie.NewCause(gtpv2.CauseIMSIIMEINotKnown, 0, 0, 0, nil),
 		)
@@ -252,7 +305,7 @@ func handleDeleteSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, msg message.Mes
 		loggerCh <- fmt.Sprintf("Error: %v", err)
 		return nil
 	}
-	dsr := message.NewDeleteSessionResponse(
+	dsr := g2message.NewDeleteSessionResponse(
 		teid, 0,
 		ie.NewCause(gtpv2.CauseRequestAccepted, 0, 0, 0, nil),
 	)

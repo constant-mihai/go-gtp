@@ -15,8 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wmnsk/go-gtp"
+	g1message "github.com/wmnsk/go-gtp/gtpv1/message"
 	"github.com/wmnsk/go-gtp/gtpv2/ie"
 	"github.com/wmnsk/go-gtp/gtpv2/message"
+	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
 // Conn represents a GTPv2-C connection.
@@ -117,7 +120,7 @@ func Dial(ctx context.Context, laddr, raddr net.Addr, localIfType, counter uint8
 	}
 
 	// decode incoming message and let it be handled by default handler funcs.
-	msg, err := message.Parse(buf[:n])
+	msg, err := gtp.Parse(buf[:n])
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +195,7 @@ func (c *Conn) Serve(ctx context.Context) error {
 		raw := make([]byte, n)
 		copy(raw, buf)
 		go func() {
-			msg, err := message.Parse(raw)
+			msg, err := gtp.Parse(raw)
 			if err != nil {
 				logf("error parsing the message: %v, %x", err, raw)
 				return
@@ -310,7 +313,7 @@ func (c *Conn) AddHandlers(funcs map[uint8]HandlerFunc) {
 	}
 }
 
-func (c *Conn) handleMessage(senderAddr net.Addr, msg message.Message) error {
+func (c *Conn) handleMessage(senderAddr net.Addr, msg gtp.Message) error {
 	if c.validationEnabled {
 		if err := c.validate(senderAddr, msg); err != nil {
 			return fmt.Errorf("failed to validate %s: %w", msg.MessageTypeName(), err)
@@ -357,7 +360,7 @@ func (c *Conn) DisableValidation() {
 	c.validationEnabled = false
 }
 
-func (c *Conn) validate(senderAddr net.Addr, msg message.Message) error {
+func (c *Conn) validate(senderAddr net.Addr, msg gtp.Message) error {
 	// check GTP version
 	if msg.Version() != 2 {
 		if err := c.VersionNotSupportedIndication(senderAddr, msg); err != nil {
@@ -367,7 +370,16 @@ func (c *Conn) validate(senderAddr net.Addr, msg message.Message) error {
 	}
 
 	// check if TEID is known or not
-	if teid := msg.TEID(); teid != 0 {
+	teid := uint32(0)
+	switch {
+	case msg.Version() == 1:
+		g1msg, _ := msg.(g1message.Message)
+		teid = g1msg.TEID()
+	case msg.Version() == 2:
+		g2msg, _ := msg.(g2message.Message)
+		teid = g2msg.TEID()
+	}
+	if teid != 0 {
 		if _, err := c.GetSessionByTEID(teid, senderAddr); err != nil {
 			return &InvalidTEIDError{TEID: teid}
 		}
@@ -448,12 +460,12 @@ func (c *Conn) EchoResponse(raddr net.Addr, req message.Message) error {
 
 // VersionNotSupportedIndication sends VersionNotSupportedIndication message
 // in response to any kind of message.Message.
-func (c *Conn) VersionNotSupportedIndication(raddr net.Addr, req message.Message) error {
-	res := message.NewVersionNotSupportedIndication(0, req.Sequence())
+func (c *Conn) VersionNotSupportedIndication(raddr net.Addr, req gtp.Message) error {
+	// res := message.NewVersionNotSupportedIndication(0, req.Sequence())
 
-	if err := c.RespondTo(raddr, req, res); err != nil {
-		return err
-	}
+	// if err := c.RespondTo(raddr, req, res); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 

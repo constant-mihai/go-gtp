@@ -8,12 +8,13 @@ import (
 	"net"
 	"sync"
 
+	"github.com/wmnsk/go-gtp"
 	"github.com/wmnsk/go-gtp/gtpv2/ie"
 	"github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
 // HandlerFunc is a handler for specific GTPv2-C message.
-type HandlerFunc func(c *Conn, senderAddr net.Addr, msg message.Message) error
+type HandlerFunc func(c *Conn, senderAddr net.Addr, msg gtp.Message) error
 
 type msgHandlerMap struct {
 	syncMap sync.Map
@@ -44,9 +45,9 @@ func newMsgHandlerMap(m map[uint8]HandlerFunc) *msgHandlerMap {
 func newDefaultMsgHandlerMap() *msgHandlerMap {
 	return newMsgHandlerMap(
 		map[uint8]HandlerFunc{
-			message.MsgTypeEchoRequest:                   handleEchoRequest,
-			message.MsgTypeEchoResponse:                  handleEchoResponse,
-			message.MsgTypeVersionNotSupportedIndication: handleVersionNotSupportedIndication,
+			//message.MsgTypeEchoRequest:                   handleEchoRequest,
+			//message.MsgTypeEchoResponse:                  handleEchoResponse,
+			//message.MsgTypeVersionNotSupportedIndication: handleVersionNotSupportedIndication,
 		},
 	)
 }

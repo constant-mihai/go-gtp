@@ -25,24 +25,39 @@ import (
 	"flag"
 	"log"
 	"net"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/wmnsk/go-gtp/gtpv1"
+	g1message "github.com/wmnsk/go-gtp/gtpv1/message"
 	"github.com/wmnsk/go-gtp/gtpv2"
-	"github.com/wmnsk/go-gtp/gtpv2/message"
+	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
 // command-line arguments
 var (
-	s5c = flag.String("s5c", "127.0.0.52", "IP for S5-C interface.")
-	s5u = flag.String("s5u", "127.0.0.4", "IP for S5-U interface.")
+	s5c = flag.String("s5c", "127.0.0.52:2123", "IP for S5-C interface.")
+	s5u = flag.String("s5u", "127.0.0.4:2152", "IP for S5-U interface.")
 )
 
 func main() {
 	flag.Parse()
 	log.SetPrefix("[P-GW] ")
 
-	s5cAddr, err := net.ResolveUDPAddr("udp", *s5c+gtpv2.GTPCPort)
+	startIMSIString := os.Getenv("START_IMSI")
+	startIMSI, err := strconv.Atoi(startIMSIString)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	populateSubscribers(startIMSI)
+
+	// for k, v := range subIPMap {
+	// 	fmt.Printf("imsi: %s, ip: %s\n", k, v)
+	// }
+
+	s5cAddr, err := net.ResolveUDPAddr("udp", *s5c)
 	if err != nil {
 		log.Println(err)
 		return
@@ -53,6 +68,7 @@ func main() {
 
 	// start listening on the specified IP:Port.
 	s5cConn := gtpv2.NewConn(s5cAddr, gtpv2.IFTypeS5S8PGWGTPC, 0)
+	s5cConn.DisableValidation()
 	go func() {
 		if err := s5cConn.ListenAndServe(ctx); err != nil {
 			log.Println(err)
@@ -63,11 +79,13 @@ func main() {
 
 	// register handlers for ALL the message you expect remote endpoint to send.
 	s5cConn.AddHandlers(map[uint8]gtpv2.HandlerFunc{
-		message.MsgTypeCreateSessionRequest: handleCreateSessionRequest,
-		message.MsgTypeDeleteSessionRequest: handleDeleteSessionRequest,
+		g2message.MsgTypeCreateSessionRequest:    handleCreateSessionRequest,
+		g2message.MsgTypeDeleteSessionRequest:    handleDeleteSessionRequest,
+		g1message.MsgTypeCreatePDPContextRequest: handleCreatePdpContextRequest,
+		g1message.MsgTypeDeletePDPContextRequest: handleDeletePdpContextRequest,
 	})
 
-	s5uAddr, err := net.ResolveUDPAddr("udp", *s5u+gtpv2.GTPUPort)
+	s5uAddr, err := net.ResolveUDPAddr("udp", *s5u)
 	if err != nil {
 		log.Println(err)
 		return
