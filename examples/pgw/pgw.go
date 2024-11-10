@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/wmnsk/go-gtp"
@@ -17,20 +18,36 @@ import (
 	g2message "github.com/wmnsk/go-gtp/gtpv2/message"
 )
 
+var subIPMap map[string]string = map[string]string{}
+var genIP net.IP
+
+func getNextIP() net.IP {
+	for i := len(genIP) - 1; i >= 0; i-- {
+		genIP[i]++
+		if genIP[i] != 0 {
+			break
+		}
+	}
+
+	return genIP
+}
+
+func populateSubscribers() {
+	startImsi := 1030000000000
+
+	genIP = net.ParseIP("10.10.10.1")
+	for i := 0; i < 100000; i++ {
+		imsi := strconv.FormatUint(uint64(startImsi+i), 10)
+		subIPMap[imsi] = getNextIP().String()
+	}
+}
+
 // getSubscriberIP is to get IP address to be assigned to the subscriber.
 //
 // In the real case, P-GW may ask AAA and PCRF retrieve required information for subscriber,
 // but here, to keep the example simple, this just returns subscriber's IP address defined in
 // the map "subIPMap".
 func getSubscriberIP(sub *gtpv2.Subscriber) (string, error) {
-	subIPMap := map[string]string{
-		"123451234567891": "10.10.10.1",
-		"123451234567892": "10.10.10.2",
-		"123451234567893": "10.10.10.3",
-		"123451234567894": "10.10.10.4",
-		"123451234567895": "10.10.10.5",
-	}
-
 	if ip, ok := subIPMap[sub.IMSI]; ok {
 		return ip, nil
 	}
@@ -104,22 +121,22 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.
 	} else {
 		return &gtpv2.RequiredIEMissingError{Type: ie.IMSI}
 	}
-	if msisdnIE := csReqFromSGW.MSISDN; msisdnIE != nil {
-		session.MSISDN, err = msisdnIE.MSISDN()
-		if err != nil {
-			return err
-		}
-	} else {
-		return &gtpv2.RequiredIEMissingError{Type: ie.MSISDN}
-	}
-	if meiIE := csReqFromSGW.MEI; meiIE != nil {
-		session.IMEI, err = meiIE.MobileEquipmentIdentity()
-		if err != nil {
-			return err
-		}
-	} else {
-		return &gtpv2.RequiredIEMissingError{Type: ie.MobileEquipmentIdentity}
-	}
+	//if msisdnIE := csReqFromSGW.MSISDN; msisdnIE != nil {
+	//session.MSISDN, err = msisdnIE.MSISDN()
+	//if err != nil {
+	//return err
+	//}
+	//} else {
+	//return &gtpv2.RequiredIEMissingError{Type: ie.MSISDN}
+	//}
+	//if meiIE := csReqFromSGW.MEI; meiIE != nil {
+	//session.IMEI, err = meiIE.MobileEquipmentIdentity()
+	//if err != nil {
+	//return err
+	//}
+	//} else {
+	//return &gtpv2.RequiredIEMissingError{Type: ie.MobileEquipmentIdentity}
+	//}
 	if apnIE := csReqFromSGW.APN; apnIE != nil {
 		bearer.APN, err = apnIE.AccessPointName()
 		if err != nil {
@@ -231,8 +248,10 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.
 		for {
 			n, raddr, _, err := uConn.ReadFromGTP(buf)
 			if err != nil {
-				return
+				fmt.Printf("error GTPU: %s", err.Error())
+				// return
 			}
+			fmt.Printf("received GTPU: %s", buf)
 
 			rsp := make([]byte, n)
 			// update message type and checksum
@@ -249,8 +268,8 @@ func handleCreateSessionRequest(c *gtpv2.Conn, sgwAddr net.Addr, genericMsg gtp.
 		}
 	}()
 
-	loggerCh <- fmt.Sprintf("Session created with S-GW for subscriber: %s;\n\tS5C S-GW: %s, TEID->: %#x, TEID<-: %#x",
-		session.Subscriber.IMSI, sgwAddr, s5sgwTEID, s5pgwTEID,
+	loggerCh <- fmt.Sprintf("Session created with S-GW for subscriber: %s;\n\tS5C S-GW: %s, TEID->: %#x, TEID<-: %#x, user address: %s",
+		session.Subscriber.IMSI, sgwAddr, s5sgwTEID, s5pgwTEID, bearer.SubscriberIP,
 	)
 	return nil
 }

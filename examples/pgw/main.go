@@ -43,6 +43,12 @@ func main() {
 	flag.Parse()
 	log.SetPrefix("[P-GW] ")
 
+	populateSubscribers()
+
+	// for k, v := range subIPMap {
+	// 	fmt.Printf("imsi: %s, ip: %s\n", k, v)
+	// }
+
 	s5cAddr, err := net.ResolveUDPAddr("udp", *s5c+gtpv2.GTPCPort)
 	if err != nil {
 		log.Println(err)
