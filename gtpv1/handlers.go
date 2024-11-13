@@ -7,6 +7,7 @@ package gtpv1
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/google/gopacket"
@@ -149,9 +150,21 @@ func handleTPDU(c Conn, senderAddr net.Addr, msg message.Message) error {
 		return err
 	}
 
-	if _, err := c.WriteTo(buffer.Bytes(), senderAddr); err != nil {
+	senderAddrSplit := strings.Split(senderAddr.String(), ":")
+	sgwAddr, err := net.ResolveUDPAddr(senderAddr.Network(), senderAddrSplit[0]+":2152")
+	if err != nil {
+		return err
+	}
+
+	// NOTE: This write doesn't have a deadline.
+	// Very high rates of incoming traffic will make this block for a long time.
+	// This function is run in a goroutine. For every incoming message a new goroutine gets spawned.
+	// For every message we have to send out we create a new gopacket buffer.
+	// If these goroutines never finish the garbage collector never cleans up the buffers.
+	// Eventually the whole system freezes and a reboot is necessary.
+	if _, err := c.WriteTo(buffer.Bytes(), sgwAddr); err != nil {
 		// TODO: metrics
-		fmt.Printf("Error %s writing to %v:\n", err.Error(), senderAddr)
+		// fmt.Printf("Error %s writing to %v:\n", err.Error(), senderAddr)
 	}
 
 	// tpdu := &tpduSet{
