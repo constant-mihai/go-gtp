@@ -32,12 +32,11 @@ func getNextIP() net.IP {
 	return genIP
 }
 
-func populateSubscribers() {
-	startImsi := 1030000000000
+func populateSubscribers(startImsi int) {
 
 	genIP = net.ParseIP("10.10.10.1")
 	for i := 0; i < 100000; i++ {
-		imsi := strconv.FormatUint(uint64(startImsi+i), 10)
+		imsi := fmt.Sprintf("%015s", strconv.FormatUint(uint64(startImsi+i), 10))
 		subIPMap[imsi] = getNextIP().String()
 	}
 }
