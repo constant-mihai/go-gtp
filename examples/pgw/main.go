@@ -35,21 +35,22 @@ import (
 
 // command-line arguments
 var (
-	s5c = flag.String("s5c", "127.0.0.52", "IP for S5-C interface.")
-	s5u = flag.String("s5u", "127.0.0.4", "IP for S5-U interface.")
+	s5c = flag.String("s5c", "127.0.0.52:2123", "IP for S5-C interface.")
+	s5u = flag.String("s5u", "127.0.0.4:2152", "IP for S5-U interface.")
 )
 
 func main() {
 	flag.Parse()
 	log.SetPrefix("[P-GW] ")
 
-	populateSubscribers()
+	populateSubscribers(1030000000000)
+	populateSubscribers(1020000000000)
 
 	// for k, v := range subIPMap {
 	// 	fmt.Printf("imsi: %s, ip: %s\n", k, v)
 	// }
 
-	s5cAddr, err := net.ResolveUDPAddr("udp", *s5c+gtpv2.GTPCPort)
+	s5cAddr, err := net.ResolveUDPAddr("udp", *s5c)
 	if err != nil {
 		log.Println(err)
 		return
@@ -77,7 +78,7 @@ func main() {
 		g1message.MsgTypeDeletePDPContextRequest: handleDeletePdpContextRequest,
 	})
 
-	s5uAddr, err := net.ResolveUDPAddr("udp", *s5u+gtpv2.GTPUPort)
+	s5uAddr, err := net.ResolveUDPAddr("udp", *s5u)
 	if err != nil {
 		log.Println(err)
 		return
